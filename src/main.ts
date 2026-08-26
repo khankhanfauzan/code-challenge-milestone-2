@@ -11,6 +11,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   app.useGlobalFilters(new AllExceptionsFilter)
 
+  app.setGlobalPrefix('api');
+
   const config = new DocumentBuilder()
     .setTitle('Simple Q&A Forum API')
     .setDescription('REST API for a Q&A forum: user auth and thread CRUD with ownership checks.')
