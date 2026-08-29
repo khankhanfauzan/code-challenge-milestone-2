@@ -6,5 +6,6 @@ import { ThreadsRepository } from './threads.repository';
 @Module({
   controllers: [ThreadsController],
   providers: [ThreadsService, ThreadsRepository],
+  exports: [ThreadsRepository]
 })
 export class ThreadsModule { }

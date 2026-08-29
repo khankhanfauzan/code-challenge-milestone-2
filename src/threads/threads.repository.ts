@@ -11,36 +11,75 @@ export class ThreadsRepository {
 
     create(userId: string, dto: CreateThreadDto) {
         return this.prisma.thread.create({
-            data: { title: dto.title, content: dto.content, userId },
+            data: {
+                title: dto.title,
+                content: dto.content, userId
+            },
             include: { user: authorSelect }
         });
     }
 
     findAll() {
-        return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, include: { user: authorSelect } });
+        return this.prisma.thread.findMany({
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: authorSelect,
+                _count: {
+                    select: { comments: true }
+                }
+            }
+        });
     }
 
     findByUserId(userId: string) {
         return this.prisma.thread.findMany({
             where: { userId },
             orderBy: { createdAt: 'desc' },
-            include: { user: authorSelect }
+            include: {
+                user: authorSelect,
+                _count: {
+                    select: { comments: true }
+                }
+            }
         });
     }
 
     findById(id: string) {
-        return this.prisma.thread.findUnique({ where: { id }, include: { user: authorSelect } });
+        return this.prisma.thread.findUnique({
+            where: { id },
+            include: {
+                user: authorSelect,
+                comments: {
+                    orderBy: { createdAt: 'asc' },
+                    include: { user: authorSelect }
+                }
+            },
+        });
     }
 
     findRawById(id: string) {
-        return this.prisma.thread.findUnique({ where: { id } });
+        return this.prisma.thread.findUnique({
+            where: { id }, include: {
+                user: authorSelect,
+                comments: {
+                    orderBy: { createdAt: 'asc' },
+                    include: { user: authorSelect }
+                }
+            },
+        });
     }
 
     update(id: string, dto: UpdateThreadDto) {
-        return this.prisma.thread.update({ where: { id }, data: dto, include: { user: authorSelect } });
+        return this.prisma.thread.update({
+            where: { id },
+            data: dto, include:
+                { user: authorSelect }
+        });
     }
 
     delete(id: string) {
-        return this.prisma.thread.delete({ where: { id } });
+        return this.prisma.thread.delete({
+            where: { id }
+        });
     }
 }
