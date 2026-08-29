@@ -1,98 +1,259 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Simple Q&A Forum API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+RESTful API untuk aplikasi Q&A Forum sederhana. Pengguna dapat mendaftar, login, membuat thread pertanyaan, serta melakukan CRUD pada thread yang mereka buat.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tech Stack
 
-## Description
+- **Runtime:** Node.js
+- **Framework:** NestJS 11
+- **ORM:** Prisma 7 (Driver Adapter dengan `pg` pool)
+- **Database:** PostgreSQL
+- **Authentication:** Passport JWT + bcrypt password hashing
+- **API Docs:** Swagger UI (`/api/docs`)
+- **Validation:** class-validator + class-transformer
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Project Structure
 
-## Project setup
-
-```bash
-$ pnpm install
+```
+src/
+├── auth/                  # Modul autentikasi
+│   ├── dto/               # RegisterDto, LoginDto
+│   ├── entities/
+│   ├── guards/            # JwtAuthGuard
+│   ├── strategies/        # JwtStrategy (Passport)
+│   ├── auth.controller.ts
+│   ├── auth.service.ts
+│   └── auth.module.ts
+├── users/                 # Modul user management
+│   ├── dto/
+│   ├── entities/
+│   ├── users.controller.ts
+│   ├── users.service.ts
+│   ├── users.repository.ts
+│   └── users.module.ts
+├── threads/               # Modul thread CRUD
+│   ├── dto/               # CreateThreadDto, UpdateThreadDto
+│   ├── entities/
+│   ├── threads.controller.ts
+│   ├── threads.service.ts
+│   ├── threads.repository.ts
+│   └── threads.module.ts
+├── prisma/                # PrismaService (global)
+│   ├── prisma.service.ts
+│   └── prisma.module.ts
+├── common/
+│   ├── decorators/        # @GetUser() custom decorator
+│   └── filters/           # AllExceptionsFilter (global)
+├── app.module.ts
+└── main.ts
 ```
 
-## Compile and run the project
+## Database Schema
 
-```bash
-# development
-$ pnpm run start
+### `users` Table
 
-# watch mode
-$ pnpm run start:dev
+| Column        | Type           | Constraints      |
+| ------------- | -------------- | ---------------- |
+| id            | VARCHAR (cuid) | PRIMARY KEY      |
+| username      | VARCHAR        | UNIQUE, NOT NULL |
+| email         | VARCHAR        | UNIQUE, NOT NULL |
+| password_hash | VARCHAR        | NOT NULL         |
+| created_at    | TIMESTAMP      | DEFAULT NOW()    |
 
-# production mode
-$ pnpm run start:prod
+### `threads` Table
+
+| Column     | Type           | Constraints                               |
+| ---------- | -------------- | ----------------------------------------- |
+| id         | VARCHAR (cuid) | PRIMARY KEY                               |
+| user_id    | VARCHAR        | FOREIGN KEY → users.id, ON DELETE CASCADE |
+| title      | VARCHAR        | NOT NULL                                  |
+| content    | TEXT           | NOT NULL                                  |
+| created_at | TIMESTAMP      | DEFAULT NOW()                             |
+| updated_at | TIMESTAMP      | AUTO-UPDATE                               |
+
+**Relasi:** Satu user dapat memiliki banyak thread (one-to-many).
+
+### Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    users {
+        varchar id PK "cuid"
+        varchar username UK "unique"
+        varchar email UK "unique"
+        varchar password_hash "hashed"
+        timestamp created_at "default now()"
+    }
+
+    threads {
+        varchar id PK "cuid"
+        varchar user_id FK "references users.id"
+        varchar title
+        text content
+        timestamp created_at "default now()"
+        timestamp updated_at "auto update"
+    }
+
+    users ||--o{ threads : "creates"
 ```
 
-## Run tests
+## API Endpoints
+
+### Auth
+
+| Method | Endpoint             | Description                  | Auth |
+| ------ | -------------------- | ---------------------------- | ---- |
+| POST   | `/api/auth/register` | Register user baru           | No   |
+| POST   | `/api/auth/login`    | Login dan dapatkan JWT token | No   |
+
+### Users
+
+| Method | Endpoint         | Description              | Auth |
+| ------ | ---------------- | ------------------------ | ---- |
+| GET    | `/api/users/:id` | Lihat profil public user | No   |
+
+### Threads
+
+| Method | Endpoint                  | Description                       | Auth |
+| ------ | ------------------------- | --------------------------------- | ---- |
+| POST   | `/api/threads`            | Buat thread baru                  | Yes  |
+| GET    | `/api/threads`            | List semua thread                 | No   |
+| GET    | `/api/threads/my-threads` | List thread milik user yang login | Yes  |
+| GET    | `/api/threads/:id`        | Detail thread by ID               | No   |
+| PUT    | `/api/threads/:id`        | Update thread (hanya pemilik)     | Yes  |
+| DELETE | `/api/threads/:id`        | Hapus thread (hanya pemilik)      | Yes  |
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js >= 18
+- PostgreSQL
+- pnpm
+
+### 1. Clone Repository
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+git clone <repository-url>
+cd code-challenge-milestone-2
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 2. Install Dependencies
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+pnpm install
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 3. Setup Environment Variables
 
-## Resources
+```bash
+cp .env.example .env
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Edit `.env` sesuai konfigurasi lokal:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```env
+PORT=3000
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/qna_forum?schema=public"
+JWT_SECRET="change-this-to-a-long-random-string"
+JWT_EXPIRES_IN="1d"
+```
 
-## Support
+### 4. Setup Database
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Buat database PostgreSQL, lalu jalankan Prisma migration:
 
-## Stay in touch
+```bash
+npx prisma migrate dev
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Seed data dummy (opsional):
 
-## License
+```bash
+npx prisma db seed
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### 5. Run the Server
+
+```bash
+# development (watch mode)
+pnpm run start:dev
+
+# production
+pnpm run start:prod
+```
+
+Server berjalan di `http://localhost:{PORT}`. Swagger UI tersedia di `http://localhost:{PORT}/api/docs`.
+
+## Validation Rules
+
+### Register
+
+| Field    | Rules                                              |
+| -------- | -------------------------------------------------- |
+| username | string, 3-30 chars, alphanumeric + underscore only |
+| email    | valid email format                                 |
+| password | string, min 6 chars                                |
+
+### Login
+
+| Field    | Rules              |
+| -------- | ------------------ |
+| email    | valid email format |
+| password | string, not empty  |
+
+### Create Thread
+
+| Field   | Rules                |
+| ------- | -------------------- |
+| title   | string, 5-200 chars  |
+| content | string, min 10 chars |
+
+### Update Thread
+
+Semua field bersifat optional (`PartialType` dari CreateThreadDto).
+
+## Error Responses
+
+API mengembalikan response JSON terstruktur:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Email already exists",
+  "error": "Bad Request",
+  "path": "/api/auth/register",
+  "timestamp": "2026-08-25T00:00:00.000Z"
+}
+```
+
+| Status Code | Keterangan                               |
+| ----------- | ---------------------------------------- |
+| 400         | Validasi gagal / data duplikat           |
+| 401         | Tidak terautentikasi / token invalid     |
+| 403         | Tidak punya akses (bukan pemilik thread) |
+| 404         | Resource tidak ditemukan                 |
+| 500         | Server error                             |
+
+## Available Scripts
+
+```bash
+pnpm run start          # Start server
+pnpm run start:dev      # Start with watch mode
+pnpm run start:debug    # Start with debug mode
+pnpm run start:prod     # Production build
+pnpm run build          # Build the project
+pnpm run test           # Unit tests
+pnpm run test:e2e       # E2E tests
+pnpm run test:cov       # Test coverage
+pnpm run lint           # Lint & auto-fix
+pnpm run format         # Format code with Prettier
+```
+
+## API Documentation Screenshots
+
+### Swagger
+
+<!-- Screenshot: Swagger -->
+
+![Swagger](./screenshots/code-challenge-milestone-2.png)
